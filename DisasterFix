@@ -1,0 +1,570 @@
+-- =================================================================
+-- PHÔI MENU: Disaster Aoi (Tối ưu cho Điện thoại - Ẩn thông báo che nút)
+-- Tác giả: @huydemon0301
+-- =================================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Lấy ID ảnh đại diện Avatar Roblox chính chủ của bạn
+local customUserId = LocalPlayer.UserId
+local myAvatarImage = "rbxthumb://type=AvatarHeadShot&id=" .. customUserId .. "&w=420&h=420"
+
+-- Dùng pcall để tải Rayfield an toàn
+local successRayfield, Rayfield = pcall(function()
+    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+end)
+
+if not successRayfield or not Rayfield then
+    warn("Không thể tải Rayfield UI! Hãy kiểm tra lại kết nối mạng hoặc Executor của bạn.")
+    return
+end
+
+local Window = Rayfield:CreateWindow({
+   Name = "Disaster Aoi | By @huydemon0301",
+   LoadingTitle = "Đang tải Disaster Aoi...",
+   LoadingSubtitle = "Created by @huydemon0301",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "DisasterAoiConfig",
+      FileName = "DisasterAoi_Settings"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "",
+      RememberJoins = true
+   },
+   KeySystem = false
+})
+
+-- =================================================================
+-- LOGIC HỆ THỐNG: ESP, INFINITY JUMP, ANTI-AFK & POSITION LOCK
+-- =================================================================
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+
+-- 1. Logic Infinity Jump
+local isInfinityJumpEnabled = false
+
+UserInputService.JumpRequest:Connect(function()
+ if not isInfinityJumpEnabled then return end
+ local character = LocalPlayer.Character
+ if not character then return end
+ local humanoid = character:FindFirstChildOfClass("Humanoid")
+ if humanoid and humanoid:GetState() ~= Enum.HumanoidStateType.Dead then
+  humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+ end
+end)
+
+-- 2. Logic Cấu hình Anti-AFK
+local AntiAFKConfig = {
+ Enabled = false,
+ Interval = 30,          
+ ActionType = "Both"     
+}
+
+LocalPlayer.Idled:Connect(function()
+ if AntiAFKConfig.Enabled then
+  VirtualUser:CaptureController()
+  VirtualUser:ClickButton2(Vector2.new(0, 0))
+ end
+end)
+
+task.spawn(function()
+ while true do
+  local waitTime = AntiAFKConfig.Interval + math.random(-2, 2)
+  task.wait(waitTime)
+  
+  if AntiAFKConfig.Enabled then
+   local character = LocalPlayer.Character
+   local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+   
+   if humanoid and humanoid:GetState() ~= Enum.HumanoidStateType.Dead then
+    local action = AntiAFKConfig.ActionType
+    
+    if action == "Jump" or action == "Both" then
+     humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+    
+    if action == "Move" or action == "Both" then
+     task.delay(0.2, function()
+      if humanoid then
+       humanoid:Move(Vector3.new(0, 0, -1), true)
+       task.wait(0.3)
+       humanoid:Move(Vector3.new(0, 0, 0), true)
+      end
+     end)
+    end
+   end
+  end
+ end
+end)
+
+-- 3. Logic Khóa vị trí (Position Lock / No Teleport)
+local isLockPosEnabled = false
+local lastCF, stop, heartbeatConnection
+
+local function startPositionLock()
+    if heartbeatConnection then heartbeatConnection:Disconnect() end
+    
+    heartbeatConnection = RunService.Heartbeat:Connect(function()
+        if not isLockPosEnabled or stop then
+            return 
+        end 
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChildOfClass('Humanoid') and char:FindFirstChildOfClass('Humanoid').RootPart then
+            lastCF = char:FindFirstChildOfClass('Humanoid').RootPart.CFrame
+        end
+    end)
+    
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChildOfClass('Humanoid') and char:FindFirstChildOfClass('Humanoid').RootPart then
+        char:FindFirstChildOfClass('Humanoid').RootPart:GetPropertyChangedSignal('CFrame'):Connect(function()
+            if not isLockPosEnabled then return end
+            stop = true
+            local c = LocalPlayer.Character
+            if c and c:FindFirstChildOfClass('Humanoid') and c:FindFirstChildOfClass('Humanoid').RootPart and lastCF then
+                c:FindFirstChildOfClass('Humanoid').RootPart.CFrame = lastCF
+            end
+            RunService.Heartbeat:Wait()
+            stop = false
+        end)    
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(character)
+    repeat RunService.Heartbeat:Wait() until character:FindFirstChildOfClass('Humanoid')
+    repeat RunService.Heartbeat:Wait() until character:FindFirstChildOfClass('Humanoid').RootPart
+    if isLockPosEnabled then
+        startPositionLock()
+    end
+end)
+
+LocalPlayer.CharacterRemoving:Connect(function()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+    end
+end)
+
+-- 4. Logic Cấu hình ESP
+local ESPConfig = {
+ ShowName = false,
+ ShowDistance = false,
+ ShowHitbox = false,
+ HitboxColor = Color3.fromRGB(255, 0, 0),
+ TextColor = Color3.fromRGB(255, 255, 255)
+}
+
+local function createESPText(player, character)
+ local head = character:WaitForChild("Head", 3)
+ if not head then return end
+	
+ if head:FindFirstChild("ESPTag") then
+  head.ESPTag:Destroy()
+ end
+	
+ local billboard = Instance.new("BillboardGui")
+ billboard.Name = "ESPTag"
+ billboard.Adornee = head
+ billboard.Size = UDim2.new(0, 200, 0, 50)
+ billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+ billboard.AlwaysOnTop = true
+	
+ local textLabel = Instance.new("TextLabel")
+ textLabel.Name = "ESPLabel"
+ textLabel.Parent = billboard
+ textLabel.Size = UDim2.new(1, 0, 1, 0)
+ textLabel.BackgroundTransparency = 1
+ textLabel.TextColor3 = ESPConfig.TextColor
+ textLabel.TextStrokeTransparency = 0.5
+ textLabel.TextSize = 14
+ textLabel.Font = Enum.Font.SourceSansBold
+ textLabel.Text = ""
+	
+ billboard.Parent = head
+end
+
+local function createESPHitbox(character)
+ if character:FindFirstChild("ESPHitbox") then
+  character.ESPHitbox:Destroy()
+ end
+	
+ local highlight = Instance.new("Highlight")
+ highlight.Name = "ESPHitbox"
+ highlight.Adornee = character
+ highlight.FillColor = ESPConfig.HitboxColor
+ highlight.FillTransparency = 0.5
+ highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+ highlight.OutlineTransparency = 0
+ highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+ highlight.Parent = character
+end
+
+RunService.RenderStepped:Connect(function()
+ for _, targetPlayer in ipairs(Players:GetPlayers()) do
+  if targetPlayer ~= LocalPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+   local char = targetPlayer.Character
+   local hrp = char.HumanoidRootPart
+   local head = char:FindFirstChild("Head")
+   
+   local hitbox = char:FindFirstChild("ESPHitbox")
+   if ESPConfig.ShowHitbox then
+    if not hitbox then
+     createESPHitbox(char)
+    end
+   elseif hitbox then
+    hitbox:Destroy()
+   end
+   
+   if head then
+    local espTag = head:FindFirstChild("ESPTag")
+    if not espTag then
+     createESPText(targetPlayer, char)
+     espTag = head:FindFirstChild("ESPTag")
+    end
+    
+    if espTag and espTag:FindFirstChild("ESPLabel") then
+     local label = espTag.ESPLabel
+     local dist = math.floor((LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") 
+      and (LocalPlayer.Character.HumanoidRootPart.Position - hrp.Position).Magnitude) or 0)
+     
+     local textResult = ""
+     if ESPConfig.ShowName then
+      textResult = targetPlayer.Name
+     end
+     
+     if ESPConfig.ShowDistance then
+      if textResult ~= "" then
+       textResult = textResult .. " [" .. dist .. "m]"
+      else
+       textResult = "[" .. dist .. "m]"
+      end
+     end
+     
+     label.Text = textResult
+     label.Visible = (ESPConfig.ShowName or ESPConfig.ShowDistance)
+    end
+   end
+  end
+ end
+end)
+
+-- =================================================================
+-- 1. TẠO CÁC TAB CHÍNH (MAIN, PLAYER, AFK, SETTING)
+-- =================================================================
+local TabMain = Window:CreateTab("Main", 4483362458)
+local TabPlayer = Window:CreateTab("Player", 4483362458)
+local TabAFK = Window:CreateTab("AFK", 4483362458)
+local TabSetting = Window:CreateTab("Setting", 4483362458)
+
+-- =================================================================
+-- 2. TAB MAIN (CÁC TÍNH NĂNG CHÍNH)
+-- =================================================================
+TabMain:CreateSection("Tính năng chính")
+
+TabMain:CreateToggle({
+   Name = "Chống sát thương khi rơi (No Fall Damage)",
+   CurrentValue = false,
+   Flag = "NoFallDamageToggle",
+   Callback = function(Value)
+      if Value then
+         pcall(function()
+            local RemoteConfigClient = require(game:GetService("ReplicatedStorage").ClientSystems.RemoteConfigClient.RemoteConfigClient)
+            local config = RemoteConfigClient.Get(true)
+            if config and config.Shared and config.Shared.DamageConfig then
+                config.Shared.DamageConfig.FallDamageMinDistance = math.huge
+                config.Shared.DamageConfig.FallDamageMinSpeed = math.huge
+                config.Shared.DamageConfig.FallDamageMaxSpeed = math.huge
+                config.Shared.DamageConfig.FallDamageRagdollThreshold = math.huge
+            end
+         end)
+      end
+   end,
+})
+
+TabMain:CreateToggle({
+   Name = "Anti Water (Chống nước)",
+   CurrentValue = false,
+   Flag = "AntiWaterToggle",
+   Callback = function(Value)
+      if Value then
+         pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/tungphan03012005-gif/Anti-Water/refs/heads/main/Anti%20Water"))()
+         end)
+      end
+   end,
+})
+
+TabMain:CreateButton({
+   Name = "TP Lobby (Dịch chuyển về sảnh)",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/tungphan03012005-gif/TP-Lobby/refs/heads/main/TP%20Lobby"))()
+      end)
+   end,
+})
+
+TabMain:CreateButton({
+   Name = "Mở Bảng Dịch Chuyển (Teleport GUI)",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://rawgithubusercontent.com/GhostPlayer352/Test4/refs/heads/main/Teleport%20Gui"))()
+      end)
+   end,
+})
+
+TabMain:CreateButton({
+   Name = "Bật Airwalk (Đi trên không)",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Airwalk-43305"))()
+      end)
+   end,
+})
+
+TabMain:CreateButton({
+   Name = "Bật Fake Lag (Giật lag giả lập)",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Fake-Lag-(Universal)-227085"))()
+      end)
+   end,
+})
+
+-- =================================================================
+-- 3. TAB PLAYER (CÁC TÍNH NĂNG NHÂN VẬT, FE FLY & ESP)
+-- =================================================================
+TabPlayer:CreateSection("Di chuyển & Tốc độ")
+
+TabPlayer:CreateSlider({
+   Name = "Tốc độ di chuyển (WalkSpeed)",
+   Range = {16, 200},
+   Increment = 1,
+   Suffix = "Speed",
+   CurrentValue = 16,
+   Flag = "WalkSpeedSlider",
+   Callback = function(Value)
+      if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+         game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
+      end
+   end,
+})
+
+TabPlayer:CreateSlider({
+   Name = "Độ cao nhảy (JumpPower)",
+   Range = {50, 300},
+   Increment = 5,
+   Suffix = "Power",
+   CurrentValue = 50,
+   Flag = "JumpPowerSlider",
+   Callback = function(Value)
+      if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+         game.Players.LocalPlayer.Character.Humanoid.UseJumpPower = true
+         game.Players.LocalPlayer.Character.Humanoid.JumpPower = Value
+      end
+   end,
+})
+
+TabPlayer:CreateToggle({
+   Name = "Nhảy vô hạn (Infinity Jump)",
+   CurrentValue = false,
+   Flag = "InfinityJumpToggle",
+   Callback = function(Value)
+      isInfinityJumpEnabled = Value
+   end,
+})
+
+TabPlayer:CreateSection("Hệ thống FE Fly")
+
+TabPlayer:CreateButton({
+   Name = "Bật FE Fly",
+   Callback = function()
+      pcall(function()
+         loadstring("\108\111\97\100\115\116\114\105\110\103\40\103\97\109\101\58\72\116\116\112\71\101\116\40\40\39\104\116\116\112\115\58\47\47\103\105\115\116\46\103\105\116\104\117\98\117\115\101\114\99\111\110\116\101\110\116\46\99\111\109\47\109\101\122\111\110\101\89\84\47\98\102\48\51\55\100\102\102\57\102\48\97\55\48\48\49\55\51\48\52\100\100\100\54\55\102\100\99\100\51\55\48\47\114\97\119\47\101\49\52\101\55\52\102\52\50\53\98\48\54\48\100\102\53\50\51\51\52\51\99\102\51\48\98\55\56\55\48\55\52\101\98\51\99\53\100\50\47\97\114\99\101\117\115\37\50\53\50\48\120\37\50\53\50\48\102\108\121\37\50\53\50\48\50\37\50\53\50\48\111\98\102\108\117\99\97\116\111\114\39\41\44\116\114\117\101\41\41\40\41\10\10")()
+      end)
+   end,
+})
+
+TabPlayer:CreateSection("Cấu hình ESP (Nhìn xuyên tường)")
+
+TabPlayer:CreateToggle({
+   Name = "ESP Hitbox (Khung / Highlight)",
+   CurrentValue = false,
+   Flag = "ESPHitboxToggle",
+   Callback = function(Value)
+      ESPConfig.ShowHitbox = Value
+   end,
+})
+
+TabPlayer:CreateToggle({
+   Name = "ESP Name (Tên người chơi)",
+   CurrentValue = false,
+   Flag = "ESPNameToggle",
+   Callback = function(Value)
+      ESPConfig.ShowName = Value
+   end,
+})
+
+TabPlayer:CreateToggle({
+   Name = "ESP Distance (Khoảng cách)",
+   CurrentValue = false,
+   Flag = "ESPDistanceToggle",
+   Callback = function(Value)
+      ESPConfig.ShowDistance = Value
+   end,
+})
+
+-- =================================================================
+-- 4. TAB AFK (CÀI ĐẶT TREO MÁY, KHÓA VỊ TRÍ & FREE CAMERA)
+-- =================================================================
+TabAFK:CreateSection("Cài đặt Treo máy")
+
+TabAFK:CreateToggle({
+   Name = "Bật/Tắt Anti-AFK (Chống văng)",
+   CurrentValue = false,
+   Flag = "AntiAFKToggle",
+   Callback = function(Value)
+      AntiAFKConfig.Enabled = Value
+   end,
+})
+
+TabAFK:CreateDropdown({
+   Name = "Hành động Anti-AFK",
+   Options = {"Both", "Jump", "Move"},
+   CurrentOption = {"Both"},
+   Flag = "AntiAFKAction",
+   Callback = function(Option)
+      AntiAFKConfig.ActionType = Option[1]
+   end,
+})
+
+TabAFK:CreateSlider({
+   Name = "Thời gian lặp lại (Giây)",
+   Range = {10, 120},
+   Increment = 5,
+   Suffix = "s",
+   CurrentValue = 30,
+   Flag = "AntiAFKInterval",
+   Callback = function(Value)
+      AntiAFKConfig.Interval = Value
+   end,
+})
+
+TabAFK:CreateSection("Tính năng Bổ trợ AFK")
+
+TabAFK:CreateToggle({
+   Name = "Bật/Tắt No Teleport (Khóa Vị Trí)",
+   CurrentValue = false,
+   Flag = "LockPosToggle",
+   Callback = function(Value)
+      isLockPosEnabled = Value
+      if Value then
+         startPositionLock()
+      else
+         if heartbeatConnection then
+            heartbeatConnection:Disconnect()
+         end
+      end
+   end,
+})
+
+TabAFK:CreateButton({
+   Name = "Free Camera",
+   Callback = function()
+      pcall(function()
+         loadstring(game:HttpGet("https://pastefy.app/tx56fL7c/raw"))()
+      end)
+   end,
+})
+
+-- =================================================================
+-- 5. TAB SETTING (GIAO DIỆN, LƯU TRỮ, PHIÊN BẢN & TÁC GIẢ)
+-- =================================================================
+TabSetting:CreateSection("Cài đặt Giao diện & Độ mờ GUI")
+
+TabSetting:CreateSlider({
+   Name = "Độ mở / mờ giao diện GUI",
+   Range = {0, 80},
+   Increment = 5,
+   Suffix = "%",
+   CurrentValue = 0,
+   Flag = "GUITransparency",
+   Callback = function(Value)
+      pcall(function()
+         for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+            if gui.Name == "Rayfield" then
+               for _, descendant in ipairs(gui:GetDescendants()) do
+                  if descendant:IsA("Frame") and (descendant.Name == "Main" or descendant.Name == "Background") then
+                     descendant.BackgroundTransparency = Value / 100
+                  end
+               end
+            end
+         end
+      end)
+   end,
+})
+
+TabSetting:CreateDropdown({
+   Name = "Chế độ Màu sắc (Tối / Sáng)",
+   Options = {"Màu Tối (Dark)", "Màu Sáng (Light)"},
+   CurrentOption = {"Màu Tối (Dark)"},
+   Flag = "ThemeColorMode",
+   Callback = function(Option)
+      pcall(function()
+         for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+            if gui.Name == "Rayfield" then
+               for _, desc in ipairs(gui:GetDescendants()) do
+                  if desc:IsA("Frame") or desc:IsA("ScrollingSection") or desc:IsA("TextButton") then
+                     if Option[1] == "Màu Sáng (Light)" then
+                        desc.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
+                     else
+                        desc.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                     end
+                  end
+               end
+            end
+         end
+      end)
+   end,
+})
+
+TabSetting:CreateSection("Quản lý Cấu hình (Config)")
+
+TabSetting:CreateToggle({
+   Name = "Auto Load Config (Tự động tải cài đặt)",
+   CurrentValue = true,
+   Flag = "AutoLoadConfigToggle",
+   Callback = function(Value)
+      Rayfield.ConfigurationSaving.Enabled = Value
+   end,
+})
+
+TabSetting:CreateButton({
+   Name = "Lưu cấu hình ngay (Save Config)",
+   Callback = function()
+      pcall(function()
+         Rayfield:SaveConfiguration()
+      end)
+   end,
+})
+
+TabSetting:CreateSection("Thông tin Phiên bản & Tác giả")
+
+TabSetting:CreateParagraph({
+   Title = "Phiên bản Script",
+   Content = "v1.0\nNgày tạo: 02/10/2026\nCập nhật cuối: 03/10/2026"
+})
+
+TabSetting:CreateParagraph({
+   Title = "Tác giả chính (Developer)",
+   Content = "@huydemon0301"
+})
+
+TabSetting:CreateButton({
+   Name = "Sao chép tên Tác giả (@huydemon0301)",
+   Callback = function()
+      if setclipboard then
+         setclipboard("@huydemon0301")
+      end
+   end,
+})
